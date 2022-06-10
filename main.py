@@ -1,12 +1,10 @@
 
-from multiprocessing import dummy
-from gi.repository import Gtk, Gio, Gdk, WebKit2
+from gi.repository import Gtk, Gio, Gdk, WebKit2, Soup
 import requests
 
 class DummyTab(Gtk.Box):
     def __init__(self):
         super().__init__()
-
 
 
 
@@ -97,14 +95,33 @@ class MainWindow(Gtk.Window):
         
         super().__init__(title="HeaderBar Demo")
         
+        context = WebKit2.WebContext.get_default()
+
+
+        self.cookies = context.get_cookie_manager()
+        self.manager = WebKit2.UserContentManager()
+
+        cookiesPath = '/tmp/cookies.txt'
+        storage = WebKit2.CookiePersistentStorage.TEXT
+        policy = WebKit2.CookieAcceptPolicy.ALWAYS
+
+        self.cookies.set_accept_policy(policy)
+        self.cookies.set_persistent_storage(cookiesPath, storage)
+
+
+        self.cookies.connect("changed", self.cookies_change)
         
         self.set_border_width(10)
         self.set_default_size(900, 600)
         
         self.maximized = False
         
-        self.tabCloseBtns = {}        
+        self.tabCloseBtns = {} 
         
+        self.searchEngine = 'https://www.google.com'
+        self.homePage = 'https://www.google.com'
+       
+
 
         self.connect("window-state-event", self.on_window_state_event)
         self.connect("key-release-event", self.checkShortcuts) 
@@ -124,8 +141,6 @@ class MainWindow(Gtk.Window):
 
         self.set_border_width(4)
         
-        self.searchEngine = 'https://www.google.com'
-        self.homePage = 'https://www.google.com'
         
         self.draw_header_bar()
         self.init_tabs()
@@ -249,7 +264,6 @@ class MainWindow(Gtk.Window):
         hb.pack_end(setbutton, False, False, 5)
 
         
-        
 
         self.set_titlebar(hb)
 
@@ -268,6 +282,11 @@ class MainWindow(Gtk.Window):
             else:
                 self.maximized = False
 
+    def cookies_change(self, *args):
+        print(args)
+        print("Updating Cookies")
+
+    
 
     
     def make_tab(self, widget=None, url=None):
@@ -275,6 +294,7 @@ class MainWindow(Gtk.Window):
         newtab.connect('notify::uri', self.on_load)
         newtab.connect('notify::title', self.on_title_change)
         
+       
         self.notebook.append_page(newtab, self.make_header_box("New Tab", newtab))
         self.notebook.set_tab_reorderable(newtab, True)
         self.notebook.set_tab_detachable(newtab, True)
@@ -426,21 +446,24 @@ class MainWindow(Gtk.Window):
         
         tabnum = self.notebook.page_num(tab)
         
-        if len(self.tabCloseBtns) == 0:
+        
+        if len(self.tabCloseBtns) == 1: 
             self.tabCloseBtns.pop(tab)
 
             self.exit()
+            
+            return
 
 
         elif tabnum == len(self.tabCloseBtns)-1 and tabnum == self.notebook.get_current_page() :
-            print(tabnum)
+
             self.notebook.set_current_page(tabnum-1)
-            
+
 
         
         self.tabCloseBtns.pop(tab)
 
-
+        # print(self.tabCloseBtns)
 
         self.notebook.remove_page(self.notebook.page_num(tab))
         
@@ -476,6 +499,13 @@ class MainWindow(Gtk.Window):
             screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
         css = f"""
+        
+        *   {{
+            outline: none;
+            border: none;
+            
+        }}
+        
         #header {{
             background-color: {self.bg_color};
             padding-top: 4px;
@@ -526,8 +556,6 @@ if __name__ == '__main__':
     Gtk.main()
 
 
-#tabs
 #cookies
 #settings
-#newtab
 #load
