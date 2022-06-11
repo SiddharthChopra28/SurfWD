@@ -241,7 +241,8 @@ class MainWindow(Gtk.Window):
         
         self.urlbar.props.placeholder_text = "Enter URL"
 
-        self.urlbar.connect("key-release-event", self.checkEnter)   
+        self.urlbar.connect("activate", self.checkEnter)   
+        self.urlbar.connect("button-press-event", self.selectAll) 
 
 
       
@@ -319,15 +320,17 @@ class MainWindow(Gtk.Window):
     def cookies_change(self, *args):
         pass
     
-    def decision_policy(self, *args):
-        print(args)
+    def selectAll(self, *args):
+        self.urlbar.select_region(0,-1)
+
+        
+    
 
     
     def make_tab(self, widget=None, url=None):
         newtab = Tab(self, url)
         newtab.connect('notify::uri', self.on_load)
         newtab.connect('notify::title', self.on_title_change)
-        newtab.connect('decide-policy', self.decision_policy)
 
        
         self.notebook.append_page(newtab, self.make_header_box("New Tab", newtab))
@@ -405,42 +408,41 @@ class MainWindow(Gtk.Window):
         self.get_active_tab().refresh()
         
     def nextab(self, *args):
-        self.get_active_tab().next_page()
+        self.notebook.next_page()
         
     def prevtab(self, *args):
-        self.get_active_tab().prev_page()
+        self.notebook.prev_page()
 
             
         
-    def checkEnter(self, urlbar, ev, data=None, *args):
-        if ev.keyval == Gdk.KEY_Return:
-            self.get_active_tab().navigate_to_url(urlbar.get_text())
+    def checkEnter(self, urlbar, *args):
+        
+        self.get_active_tab().navigate_to_url(urlbar.get_text())
 
     def checkShortcuts(self, window, ev, data=None, *ars):
-        print(ev.state)
         if ev.state == Gdk.ModifierType.SHIFT_MASK | Gdk.ModifierType.CONTROL_MASK or ev.state== Gdk.ModifierType.SHIFT_MASK | Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.MOD2_MASK:
 
             if ev.keyval in [Gdk.KEY_ISO_Left_Tab, Gdk.KEY_Tab]:
-                # print('he;;p')
-                self.nextab()   
+                self.prevtab()
+
 
         elif ev.state == Gdk.ModifierType.CONTROL_MASK or ev.state == Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.MOD2_MASK:
 
             if ev.keyval in [Gdk.KEY_ISO_Left_Tab, Gdk.KEY_Tab]:
-                self.prevtab()
-                print('he;;p')
+                self.nextab()   
+
 
             elif ev.keyval in [Gdk.KEY_W, Gdk.KEY_w]:
                 self.close_tab(self.tabCloseBtns[self.get_active_tab()])
-                print('he;;p')
+
 
             elif ev.keyval in [Gdk.KEY_R, Gdk.KEY_r]:
                 self.reload()
-                print('he;;p')
-                
+
+
             elif ev.keyval in [Gdk.KEY_T, Gdk.KEY_t]:
                 self.make_tab()
-                print('he;;p')
+
                 
 
 
