@@ -1,6 +1,8 @@
 
-from gi.repository import Gtk, Gio, Gdk, WebKit2, Soup
+from gi.repository import Gtk, Gio, Gdk, WebKit2, GLib
 import requests
+import os
+import urllib
 
 class DummyTab(Gtk.Box):
     def __init__(self):
@@ -11,18 +13,23 @@ class DummyTab(Gtk.Box):
 class Tab(WebKit2.WebView):
     def __init__(self, mainWindow, url=None):
         super().__init__()
+        
+        self.NEWTABPATH = 'templates/newtab.html'
+        self.CONTROLSPATH = 'templates/controls.html'
+    
+
         if url is None:
-            self.url = 'https://www.google.com'
+            self.url = 'surfwd://newtab'
         else:
             self.url = url
-        
+            
         self.mainWindow = mainWindow
         self.navigate_to_url(self.url)
-        
+
         
 
     def formulate_link(self, link):
-        protocols = ('http://', 'https://', 'ftp://', 'swd://')
+        protocols = ('http://', 'https://', 'ftp://', 'swd://', 'surfwd://')
         
         if link.startswith(protocols):
             return link
@@ -31,12 +38,31 @@ class Tab(WebKit2.WebView):
         
         return link
 
+
+    def handle_custom_uri(self, req_page):
+        if req_page == 'newtab':
+            with open(self.NEWTABPATH, 'r') as f:
+                html = f.read()
+            self.load_html(html, f'surfwd://{req_page}')
+        if req_page == 'controls':
+            with open(self.CONTROLSPATH, 'r') as f:
+                html = f.read()
+            self.load_html(html, f'surfwd://{req_page}')
+            
+            
+
         
     def navigate_to_url(self, query, *args):
-
         if self.isLink(query):
             link = self.formulate_link(query)
             self.load_uri(link)
+            
+        elif self.isCustomUri(query):
+            req_page = query.lstrip('surfwd://')
+            self.handle_custom_uri(req_page)
+            link = self.formulate_link(query)
+            
+            
         else:
             link = f'{self.mainWindow.searchEngine}/search?q={query}'
             self.load_uri(link)
@@ -50,6 +76,11 @@ class Tab(WebKit2.WebView):
 
         ltext=txt.lower().split('/')[0]
         return ltext.startswith(('http','www','ftp', 'swd')) or ltext.endswith(domain_suffixes)
+
+    def isCustomUri(self, txt:str):
+        return txt.startswith('surfwd://')
+            
+
 
 
     def set_url(self, url):
@@ -65,7 +96,8 @@ class Tab(WebKit2.WebView):
         self.navigate_to_url(self.mainWindow.homePage)
         
     def refresh(self, *args):
-        self.reload()
+        print('done')
+        self.navigate_to_url(self.get_uri())
         
 
 
@@ -221,6 +253,8 @@ class MainWindow(Gtk.Window):
         setimage = Gtk.Image.new_from_gicon(seticon, Gtk.IconSize.BUTTON)
         setbutton.add(setimage)
         
+        setbutton.connect("clicked", self.settingspage)
+
         #window decorations
         
         closebutton = Gtk.Button()
@@ -283,23 +317,28 @@ class MainWindow(Gtk.Window):
                 self.maximized = False
 
     def cookies_change(self, *args):
-        print(args)
-        print("Updating Cookies")
-
+        pass
     
+    def decision_policy(self, *args):
+        print(args)
 
     
     def make_tab(self, widget=None, url=None):
         newtab = Tab(self, url)
         newtab.connect('notify::uri', self.on_load)
         newtab.connect('notify::title', self.on_title_change)
-        
+        newtab.connect('decide-policy', self.decision_policy)
+
        
         self.notebook.append_page(newtab, self.make_header_box("New Tab", newtab))
         self.notebook.set_tab_reorderable(newtab, True)
         self.notebook.set_tab_detachable(newtab, True)
         self.show_all()
+        
+        self.notebook.set_current_page(self.notebook.page_num(newtab))
 
+        self.urlbar.grab_focus()
+        
         return newtab
 
 
@@ -344,6 +383,11 @@ class MainWindow(Gtk.Window):
         self.add(vbox)
 
    
+    def settingspage(self, *args):
+        
+       self.make_tab(url="surfwd://controls")
+   
+   
     def moveAddToEnd(self, *args):
         self.notebook.reorder_child(self.newTabPage, -1)
 
@@ -358,7 +402,13 @@ class MainWindow(Gtk.Window):
         self.get_active_tab().gohome()
         
     def reload(self, *args):
-        self.get_active_tab().reload()
+        self.get_active_tab().refresh()
+        
+    def nextab(self, *args):
+        self.get_active_tab().next_page()
+        
+    def prevtab(self, *args):
+        self.get_active_tab().prev_page()
 
             
         
@@ -367,28 +417,30 @@ class MainWindow(Gtk.Window):
             self.get_active_tab().navigate_to_url(urlbar.get_text())
 
     def checkShortcuts(self, window, ev, data=None, *ars):
-        
-        if ev.state == Gdk.ModifierType.CONTROL_MASK |  Gdk.ModifierType.SHIFT_MASK:
-            if ev.keyval in [Gdk.KEY_ISO_Left_Tab, Gdk.KEY_Tab]:
-                print('prev page')
-
-            elif ev.keyval in [Gdk.KEY_T, Gdk.KEY_t]:
-                print('reopen closed tab page')
-
-        elif ev.state == Gdk.ModifierType.CONTROL_MASK:
+        print(ev.state)
+        if ev.state == Gdk.ModifierType.SHIFT_MASK | Gdk.ModifierType.CONTROL_MASK or ev.state== Gdk.ModifierType.SHIFT_MASK | Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.MOD2_MASK:
 
             if ev.keyval in [Gdk.KEY_ISO_Left_Tab, Gdk.KEY_Tab]:
-                print('next page')
+                # print('he;;p')
+                self.nextab()   
 
+        elif ev.state == Gdk.ModifierType.CONTROL_MASK or ev.state == Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.MOD2_MASK:
+
+            if ev.keyval in [Gdk.KEY_ISO_Left_Tab, Gdk.KEY_Tab]:
+                self.prevtab()
+                print('he;;p')
 
             elif ev.keyval in [Gdk.KEY_W, Gdk.KEY_w]:
-                print('close tab')
-                
+                self.close_tab(self.tabCloseBtns[self.get_active_tab()])
+                print('he;;p')
+
             elif ev.keyval in [Gdk.KEY_R, Gdk.KEY_r]:
-                print('reload tab')
+                self.reload()
+                print('he;;p')
                 
             elif ev.keyval in [Gdk.KEY_T, Gdk.KEY_t]:
-                print('new tab')
+                self.make_tab()
+                print('he;;p')
                 
 
 
@@ -433,8 +485,13 @@ class MainWindow(Gtk.Window):
         if isinstance(tab, DummyTab):
             self.notebook.stop_emission_by_name("switch-page")
             return
-
-        self.urlbar.props.text = tab.get_uri()
+        
+        tab_uri = tab.get_uri()
+        print(tab_uri)
+        if tab_uri == 'surfwd://newtab':
+            tab_uri = ''
+        
+        self.urlbar.props.text = tab_uri
         
         
     def close_tab(self, btn, *args):
@@ -556,6 +613,3 @@ if __name__ == '__main__':
     Gtk.main()
 
 
-#cookies
-#settings
-#load
