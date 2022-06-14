@@ -44,6 +44,7 @@ class Tab(WebKit2.WebView):
             with open(self.NEWTABPATH, 'r') as f:
                 html = f.read()
             self.load_html(html, f'surfwd://{req_page}')
+            
         if req_page == 'controls':
             with open(self.CONTROLSPATH, 'r') as f:
                 html = f.read()
@@ -58,10 +59,10 @@ class Tab(WebKit2.WebView):
             self.load_uri(link)
             
         elif self.isCustomUri(query):
+
             req_page = query.lstrip('surfwd://')
             self.handle_custom_uri(req_page)
             link = self.formulate_link(query)
-            
             
         else:
             link = f'{self.mainWindow.searchEngine}/search?q={query}'
@@ -69,6 +70,7 @@ class Tab(WebKit2.WebView):
             
             
         self.set_url(link)
+        self.mainWindow.remove_home_uri(self)
 
 
     def isLink(self, txt:str):
@@ -151,7 +153,7 @@ class MainWindow(Gtk.Window):
         self.tabCloseBtns = {} 
         
         self.searchEngine = 'https://www.google.com'
-        self.homePage = 'https://www.google.com'
+        self.homePage = 'surfwd://newtab'
        
 
 
@@ -171,7 +173,7 @@ class MainWindow(Gtk.Window):
         except:
             self.bg_color = "black"
 
-        self.set_border_width(4)
+        self.set_border_width(2)
         
         
         self.draw_header_bar()
@@ -340,7 +342,8 @@ class MainWindow(Gtk.Window):
         
         self.notebook.set_current_page(self.notebook.page_num(newtab))
 
-        self.urlbar.grab_focus()
+        if url is None:
+            self.urlbar.grab_focus()
         
         return newtab
 
@@ -388,7 +391,17 @@ class MainWindow(Gtk.Window):
    
     def settingspage(self, *args):
         
-       self.make_tab(url="surfwd://controls")
+        settingsAlreadyOpen = False
+        
+        for tab in self.notebook.get_children():
+            if isinstance(tab, Tab):
+                if tab.get_uri() == 'surfwd://controls':
+                    self.notebook.set_current_page(self.notebook.page_num(tab))
+                    settingsAlreadyOpen = True
+                    break
+        if not settingsAlreadyOpen:
+            self.make_tab(url="surfwd://controls")
+
    
    
     def moveAddToEnd(self, *args):
@@ -482,18 +495,23 @@ class MainWindow(Gtk.Window):
 
         self.notebook.set_tab_label(tab, self.make_header_box(heading, tab))
 
+
+    def remove_home_uri(self, tab):
+        tab_uri = tab.get_uri()
+
+        if tab_uri == 'surfwd://newtab':
+            tab_uri = ''
+        
+        self.urlbar.props.text = tab_uri
+
         
     def on_tab_change(self, ntbk, tab, ind, *args):
         if isinstance(tab, DummyTab):
             self.notebook.stop_emission_by_name("switch-page")
             return
         
-        tab_uri = tab.get_uri()
-        print(tab_uri)
-        if tab_uri == 'surfwd://newtab':
-            tab_uri = ''
+        self.remove_home_uri(tab)
         
-        self.urlbar.props.text = tab_uri
         
         
     def close_tab(self, btn, *args):
@@ -582,7 +600,7 @@ class MainWindow(Gtk.Window):
         .closetab{{
             padding: 3px;
             background: none;
-            border: none;
+            border: none;   
             margin-left: 6px;
 
         }}
